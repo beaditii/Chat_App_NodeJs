@@ -5,24 +5,59 @@ const http = require('http');
 const server=http.createServer(app);
 const { Server }=require('socket.io');
 const io=new Server(server);
+const connect = require('./config/database-config')
+const Chat=require('./models/chat');
 
-app.use('/',express.static(__dirname + '/public'));
+
 
  io.on('connection',(socket)=>{
     console.log('a user connected');
+    socket.on('join_room',(data)=>{
+        console.log('joining a room',data.roomid);
+        socket.join(data.roomid);
+    });
 
       socket.on('msg_send',(data)=>{
-        console.log(data);
-        // io.emit('msg_rcvd',data);
+
+        const chat=Chat.create({
+            roomId: data.roomid,
+            user :data.username,
+            content :data.msg
+        })
+        io.to(data.roomid).emit('msg_rcvd',data);
+
         //socket.broadcast.emit('msg_rcvd',data);
-        socket.emit('msg_rcvd',data);
+        // socket.emit('msg_rcvd',data);
+      });
+
+      socket.on ('typing',(data)=>{
+        socket.broadcast.to(data.roomid).emit('someone_typing');
       })
+        
 
     
  });
 
-server.listen(3000,()=>{
+ app.set('view engine','ejs');
+ app.use('/',express.static(__dirname + '/public'));
+
+ app.get('/chat/:roomid',async(req,res)=>{
+    const chats = await Chat.find({
+        roomId: req.params.roomid
+    }).select('content user');
+    // console.log(chats);
+    res.render('index', {
+        name: 'Sanket',
+        id: req.params.roomid,
+        chats: chats
+    });
+ })
+
+server.listen(3000,async()=>{
     console.log('Server started');
+
+    await connect();
+    console.log("mongodb connected");
 });
 
 /**
